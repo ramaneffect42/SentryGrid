@@ -1,97 +1,147 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Disaster Mesh Communication App
 
-# Getting Started
+Android-first React Native starter for offline, peer-to-peer disaster communication. This repo contains the app architecture, storage layer, navigation, permissions flow, and transport-agnostic mesh scaffolding needed for Phase 1 and the start of Phase 2.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Verified versions
 
-## Step 1: Start Metro
+- React Native `0.81.1`
+- React Navigation `7.x`
+- `react-native-quick-sqlite` `8.2.7`
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+`react-native-quick-sqlite` is currently marked deprecated on npm in favor of `react-native-nitro-sqlite`, but this starter keeps it because you explicitly requested it. The storage interface is isolated so you can swap implementations later with minimal refactoring.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## 1. Create the app shell
 
-```sh
-# Using npm
+If you are starting from a completely empty folder, create the native scaffold first:
+
+```powershell
+npx @react-native-community/cli@latest init DisasterMeshApp --version 0.81.1
+cd DisasterMeshApp
+```
+
+If you are using this repo as the app root, generate the native scaffold into this folder before the first build, then keep the `src/` and `App.js` files from this starter.
+
+## 2. Install dependencies
+
+```powershell
+npm install
+```
+
+If you bootstrap from a plain React Native CLI project and only want to add the app dependencies manually:
+
+```powershell
+npm install @react-navigation/native @react-navigation/native-stack react-native-screens react-native-safe-area-context react-native-gesture-handler react-native-quick-sqlite
+```
+
+## 3. Android permissions
+
+Add these permissions to `android/app/src/main/AndroidManifest.xml` inside the `<manifest>` element:
+
+```xml
+<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
+<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+<uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+```
+
+Inside the `<application>` tag, keep your default app settings and add any BLE service declarations later when native transport code is introduced.
+
+## 4. Gradle notes
+
+For `react-native-quick-sqlite`, you can define SQLite compile flags in `android/gradle.properties` if needed:
+
+```properties
+quickSqliteFlags=SQLITE_ENABLE_FTS5=1
+```
+
+You do not need custom Gradle changes for this starter beyond the normal React Native CLI scaffold.
+
+## 5. Run on Android
+
+Start Metro:
+
+```powershell
 npm start
-
-# OR using Yarn
-yarn start
 ```
 
-## Step 2: Build and run your app
+In another terminal, build and run:
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
+```powershell
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### iOS
+Useful device commands:
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+```powershell
+adb devices
+adb reverse tcp:8081 tcp:8081
+adb logcat *:S ReactNative:V ReactNativeJS:V
 ```
 
-Then, and every time you update your native dependencies, run:
+## 6. Debugging checklist
 
-```sh
-bundle exec pod install
+### Metro issues
+
+- Clear cache: `npx react-native start --reset-cache`
+- Ensure port 8081 is free
+- Re-run `adb reverse tcp:8081 tcp:8081` for physical devices
+
+### ADB issues
+
+- Verify device visibility: `adb devices`
+- Restart server: `adb kill-server` then `adb start-server`
+- Re-enable USB debugging if the device shows as unauthorized
+
+### Build failures
+
+- Clean Gradle: `cd android && .\gradlew clean`
+- Confirm `ANDROID_HOME` and platform tools are in `PATH`
+- Open the `android/` project in Android Studio and let it sync if Gradle downloads are incomplete
+
+## 7. Folder structure
+
+```text
+.
+|-- App.js
+|-- index.js
+|-- package.json
+`-- src
+    |-- components
+    |   |-- MessageBubble.js
+    |   `-- ScreenContainer.js
+    |-- navigation
+    |   `-- AppNavigator.js
+    |-- screens
+    |   |-- ChatScreen.js
+    |   |-- HomeScreen.js
+    |   `-- NearbyDevicesScreen.js
+    |-- services
+    |   |-- MeshService.js
+    |   |-- PermissionsService.js
+    |   |-- StorageService.js
+    |   |-- meshRuntime.js
+    |   `-- transports
+    |       |-- BLETransport.js
+    |       |-- BaseTransport.js
+    |       `-- WiFiDirectTransport.js
+    `-- utils
+        |-- constants.js
+        `-- logger.js
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+## 8. Architecture notes
 
-```sh
-# Using npm
-npm run ios
+- `MeshService` owns discovery, peer state, deduplication, TTL handling, and relay decisions.
+- `BaseTransport` defines the interface that BLE, Wi-Fi Direct, and future LoRa transports implement.
+- Messages are transport-agnostic envelopes with `id`, `sender`, `type`, `payload`, `ttl`, `timestamp`, `via`, and `deviceType`.
+- `StorageService` keeps `messages` and `peers` in SQLite so the app can recover after disconnections or restarts.
+- Future ESP32 repeater support fits by adding `LoRaTransport` without rewriting routing logic.
 
-# OR using Yarn
-yarn ios
-```
+## 9. Next implementation step
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+This starter intentionally leaves BLE and Wi-Fi Direct as scaffolds because production-grade Android transport code will require either native modules or carefully selected React Native community packages. Once you choose the BLE and Wi-Fi Direct libraries, the transport classes are the only area that should need significant native integration work.
