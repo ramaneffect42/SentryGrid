@@ -21,7 +21,7 @@ function AppNavigator() {
           backgroundColor: APP_COLORS.background,
         },
       }}>
-      <Stack.Screen name="Home" component={HomeScreen} options={{title: 'Disaster Mesh'}} />
+      <Stack.Screen name="Home" component={HomeScreen} options={{title: 'SentryGrid'}} />
       <Stack.Screen name="NearbyDevices" component={NearbyDevicesScreen} options={{title: 'Nearby Devices'}} />
       <Stack.Screen name="Chat" component={ChatScreen} options={{title: 'Mesh Chat'}} />
     </Stack.Navigator>
