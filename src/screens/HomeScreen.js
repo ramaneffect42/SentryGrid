@@ -81,8 +81,8 @@ function HomeScreen({navigation}) {
       </View>
 
       <View style={styles.panel}>
-        <Text style={styles.label}>Local node</Text>
-        <Text style={styles.value}>{state.deviceId || 'pending initialization'}</Text>
+        <Text style={styles.label}>This phone</Text>
+        <Text style={styles.value}>{state.displayName || 'Unnamed user'}</Text>
         <Text style={styles.meta}>Peers {state.peers.length} | Cached logs {state.logs.length}</Text>
       </View>
 
@@ -132,6 +132,10 @@ function HomeScreen({navigation}) {
 
       <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('Chat')}>
         <Text style={styles.secondaryButtonText}>Open Mesh Console</Text>
+      </Pressable>
+
+      <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('ChatHistory')}>
+        <Text style={styles.secondaryButtonText}>View Chat History</Text>
       </Pressable>
     </ScreenContainer>
   );

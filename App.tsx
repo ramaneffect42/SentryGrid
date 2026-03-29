@@ -4,12 +4,14 @@ import {NavigationContainer} from '@react-navigation/native';
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 
 import AppNavigator from './src/navigation/AppNavigator';
+import ProfileSetupScreen from './src/screens/ProfileSetupScreen';
 import meshService from './src/services/meshRuntime';
 import permissionsService from './src/services/PermissionsService';
 import logger from './src/utils/logger';
 
 function App(): React.JSX.Element {
   const [isReady, setIsReady] = useState(false);
+  const [hasDisplayName, setHasDisplayName] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -18,6 +20,7 @@ function App(): React.JSX.Element {
       try {
         await permissionsService.requestStartupPermissions();
         await meshService.initialize();
+        setHasDisplayName(Boolean(meshService.getDisplayName()));
       } catch (error) {
         logger.error('App bootstrap failed', error);
       } finally {
@@ -45,6 +48,15 @@ function App(): React.JSX.Element {
           <ActivityIndicator size="large" color="#38bdf8" />
         </View>
       </SafeAreaView>
+    );
+  }
+
+  if (!hasDisplayName) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar barStyle="light-content" backgroundColor="#0f172a" />
+        <ProfileSetupScreen onComplete={() => setHasDisplayName(true)} />
+      </SafeAreaProvider>
     );
   }
 

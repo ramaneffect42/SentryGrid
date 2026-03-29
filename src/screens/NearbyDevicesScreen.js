@@ -1,7 +1,8 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Alert, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import ScreenContainer from '../components/ScreenContainer';
+import loraBleBridgeService from '../services/loraBridgeRuntime';
 import meshService from '../services/meshRuntime';
 import {APP_COLORS} from '../utils/constants';
 
@@ -9,6 +10,8 @@ function NearbyDevicesScreen() {
   const [state, setState] = useState(meshService.getState());
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [bleBridgeDevices, setBleBridgeDevices] = useState([]);
+  const [isScanningBridge, setIsScanningBridge] = useState(false);
 
   useEffect(() => meshService.subscribe(setState), []);
 
@@ -28,6 +31,38 @@ function NearbyDevicesScreen() {
     }
   };
 
+  const scanForBleBridge = async () => {
+    setIsScanningBridge(true);
+
+    try {
+      const devices = await loraBleBridgeService.scanForDevices();
+      setBleBridgeDevices(devices);
+      if (devices.length === 0) {
+        Alert.alert('No bridge found', 'No ESP32 BLE LoRa bridge was discovered in range.');
+      }
+    } catch (error) {
+      Alert.alert(
+        'BLE scan failed',
+        error instanceof Error ? error.message : 'Unable to scan for the ESP32 BLE bridge.',
+      );
+    } finally {
+      setIsScanningBridge(false);
+    }
+  };
+
+  const connectBleBridge = async device => {
+    try {
+      await loraBleBridgeService.connect(device.id);
+      await meshService.registerLoRaBridge(loraBleBridgeService, device.id, device.name);
+      Alert.alert('LoRa bridge connected', `${device.name} is now connected over BLE UART.`);
+    } catch (error) {
+      Alert.alert(
+        'Bridge connection failed',
+        error instanceof Error ? error.message : 'Unable to connect to the ESP32 BLE bridge.',
+      );
+    }
+  };
+
   return (
     <ScreenContainer
       title="Nearby Nodes"
@@ -35,6 +70,22 @@ function NearbyDevicesScreen() {
       <Pressable style={styles.scanButton} onPress={openScanner}>
         <Text style={styles.scanButtonText}>Scan Bluetooth Devices</Text>
       </Pressable>
+
+      <Pressable style={styles.bridgeScanButton} onPress={scanForBleBridge}>
+        <Text style={styles.bridgeScanButtonText}>
+          {isScanningBridge ? 'Scanning ESP32 BLE Bridge...' : 'Scan ESP32 LoRa Bridge'}
+        </Text>
+      </Pressable>
+
+      {bleBridgeDevices.map(device => (
+        <View key={`bridge-${device.id}`} style={styles.bridgeCard}>
+          <Text style={styles.title}>{device.name}</Text>
+          <Text style={styles.meta}>BLE UART bridge | RSSI {device.rssi ?? 'unknown'}</Text>
+          <Pressable style={styles.bridgeButton} onPress={() => connectBleBridge(device)}>
+            <Text style={styles.bridgeButtonText}>Connect BLE Bridge</Text>
+          </Pressable>
+        </View>
+      ))}
 
       {state.peers.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -117,6 +168,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  bridgeScanButton: {
+    backgroundColor: '#173321',
+    borderRadius: 18,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  bridgeScanButtonText: {
+    color: '#d1fae5',
+    fontSize: 16,
+    fontWeight: '700',
+  },
   emptyCard: {
     padding: 20,
     borderRadius: 18,
@@ -173,6 +235,14 @@ const styles = StyleSheet.create({
   bridgeButtonText: {
     color: '#b7f7c2',
     fontWeight: '700',
+  },
+  bridgeCard: {
+    backgroundColor: APP_COLORS.panel,
+    borderRadius: 18,
+    padding: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#24553a',
   },
   modalScrim: {
     flex: 1,

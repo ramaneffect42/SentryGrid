@@ -5,6 +5,8 @@ import {APP_COLORS} from '../utils/constants';
 
 function MessageBubble({message}) {
   const path = Array.isArray(message.via) && message.via.length > 0 ? message.via.join(' -> ') : 'direct';
+  const isDirect = message.metadata?.mode === 'direct';
+  const targetPeerName = message.metadata?.targetPeerName;
 
   return (
     <View style={styles.card}>
@@ -13,6 +15,7 @@ function MessageBubble({message}) {
         <Text style={styles.time}>{new Date(message.timestamp).toLocaleTimeString()}</Text>
       </View>
       <Text style={styles.payload}>{message.payload}</Text>
+      {isDirect && targetPeerName ? <Text style={styles.badge}>Direct to {targetPeerName}</Text> : null}
       <Text style={styles.meta}>
         TTL {message.ttl} | Path {path}
       </Text>
@@ -50,6 +53,16 @@ const styles = StyleSheet.create({
   meta: {
     color: APP_COLORS.textSecondary,
     fontSize: 12,
+  },
+  badge: {
+    alignSelf: 'flex-start',
+    color: '#b7f7c2',
+    backgroundColor: '#183018',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
 

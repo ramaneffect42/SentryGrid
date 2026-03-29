@@ -4,11 +4,13 @@ import {
   EmergencyLogRecord,
   MeshPeerRecord,
   countUnsyncedEmergencyLogs,
+  getAppSetting,
   getMeshPeers,
   getRecentEmergencyLogs,
   hasEmergencyLog,
   initializeDatabase,
   saveEmergencyLog,
+  setAppSetting,
   upsertMeshPeer,
 } from '../database/Schema';
 import logger from '../utils/logger';
@@ -48,6 +50,7 @@ export interface MeshTransport {
   connectLoRaBridge?: (peer: MeshPeerRecord) => Promise<void>;
   isDeviceConnected?: (address: string) => Promise<boolean>;
   writeToDevice?: (address: string, message: string) => Promise<void>;
+  sendToPeer?: (address: string, packet: MeshPacket) => Promise<void>;
 }
 
 export interface BluetoothSerialAdapter {
@@ -59,11 +62,13 @@ export interface BluetoothSerialAdapter {
 
 export interface MeshState {
   deviceId: string;
+  displayName: string | null;
   peers: MeshPeerRecord[];
   logs: EmergencyLogRecord[];
   messages: Array<{
     id: string;
     sender: string;
+    senderId: string;
     type: EmergencyEventType;
     payload: string;
     timestamp: string;
@@ -71,6 +76,7 @@ export interface MeshState {
     ttl: number;
     deviceType: string;
     receivedFrom?: string;
+    metadata?: Record<string, unknown>;
   }>;
   unsyncedCount: number;
   loraConnected: boolean;
@@ -95,6 +101,7 @@ class MeshService {
   private loraAdapter: BluetoothSerialAdapter | null = null;
   private loraDeviceId: string | null = null;
   private loraBridgeName: string | null = null;
+  private displayName: string | null = null;
 
   constructor({deviceId, transports = [], maxHops = 5}: MeshServiceOptions = {}) {
     this.deviceId = deviceId ?? `sentrygrid-${createId()}`;
@@ -109,6 +116,7 @@ class MeshService {
 
     await initializeDatabase();
     const [logs, peers] = await Promise.all([getRecentEmergencyLogs(), getMeshPeers()]);
+    this.displayName = await getAppSetting('displayName');
 
     this.logs = logs;
     this.peers = peers;
@@ -145,6 +153,7 @@ class MeshService {
   getState(): MeshState {
     return {
       deviceId: this.deviceId,
+      displayName: this.displayName,
       peers: this.peers,
       logs: this.logs,
       messages: this.logs.map(log => this.toLegacyMessage(log)),
@@ -152,6 +161,22 @@ class MeshService {
       loraConnected: Boolean(this.loraAdapter && this.loraDeviceId),
       loraBridgeName: this.loraBridgeName,
     };
+  }
+
+  getDisplayName(): string | null {
+    return this.displayName;
+  }
+
+  async setDisplayName(displayName: string): Promise<void> {
+    const trimmed = displayName.trim();
+
+    if (!trimmed) {
+      throw new Error('Display name cannot be empty');
+    }
+
+    this.displayName = trimmed;
+    await setAppSetting('displayName', trimmed);
+    await this.emit();
   }
 
   async connectToPeer(peer: MeshPeerRecord): Promise<void> {
@@ -169,6 +194,30 @@ class MeshService {
     const log = this.createLocalLog('TEXT', message, null, metadata);
     await this.persistAndPublish(log);
     await this.broadcastPacket(this.toPacket(log));
+    return log;
+  }
+
+  async sendTextToPeer(peerId: string, message: string): Promise<EmergencyLogRecord> {
+    const peer = this.peers.find(item => item.id === peerId);
+
+    if (!peer) {
+      throw new Error('Selected peer is no longer available');
+    }
+
+    const transport = this.transports.find(candidate => candidate.name === peer.transport);
+
+    if (!transport || typeof transport.sendToPeer !== 'function') {
+      throw new Error(`Direct messaging is not supported on ${peer.transport}`);
+    }
+
+    const log = this.createLocalLog('TEXT', message, null, {
+      mode: 'direct',
+      targetPeerId: peer.id,
+      targetPeerName: peer.name ?? peer.id,
+    });
+
+    await this.persistAndPublish(log);
+    await transport.sendToPeer(peer.id, this.toPacket(log));
     return log;
   }
 
@@ -243,6 +292,16 @@ class MeshService {
     this.loraDeviceId = deviceId;
   }
 
+  async registerLoRaBridge(
+    adapter: BluetoothSerialAdapter,
+    deviceId: string,
+    bridgeName: string | null = null,
+  ): Promise<void> {
+    this.attachLoRaSerial(adapter, deviceId);
+    this.loraBridgeName = bridgeName ?? deviceId;
+    await this.emit();
+  }
+
   async connectLoRaSerial(): Promise<void> {
     if (!this.loraAdapter || !this.loraDeviceId) {
       throw new Error('Bluetooth serial adapter not configured');
@@ -266,6 +325,10 @@ class MeshService {
     }
 
     await this.loraAdapter.write(`${message}\n`);
+  }
+
+  async receiveBridgePacket(packet: MeshPacket, transportName = 'LoRa-BLE'): Promise<void> {
+    await this.handleIncomingPacket(packet, {name: transportName} as MeshTransport);
   }
 
   private async handlePeerDiscovered(peer: any, transport: MeshTransport): Promise<void> {
@@ -365,7 +428,10 @@ class MeshService {
       syncedAt: null,
       createdAt: timestamp,
       updatedAt: timestamp,
-      metadata,
+      metadata: {
+        ...metadata,
+        senderName: this.displayName ?? 'Anonymous',
+      },
     };
   }
 
@@ -377,15 +443,44 @@ class MeshService {
   }
 
   private async broadcastPacket(packet: MeshPacket, excludeTransportName?: string): Promise<void> {
-    await Promise.all(
-      this.transports
-        .filter(transport => transport.name !== excludeTransportName)
-        .map(transport =>
-          transport.broadcast({
-            ...packet,
-            transport: transport.name,
-          }),
-        ),
+    const transportBroadcasts = this.transports
+      .filter(transport => transport.name !== excludeTransportName)
+      .map(transport =>
+        transport.broadcast({
+          ...packet,
+          transport: transport.name,
+        }),
+      );
+
+    const loraBridgeBroadcast =
+      this.loraAdapter && excludeTransportName !== 'LoRa-BLE'
+        ? this.sendPacketToLoRaBridge(packet)
+        : Promise.resolve();
+
+    await Promise.all([...transportBroadcasts, loraBridgeBroadcast]);
+  }
+
+  private async sendPacketToLoRaBridge(packet: MeshPacket): Promise<void> {
+    if (!this.loraAdapter) {
+      return;
+    }
+
+    if (typeof this.loraAdapter.isConnected === 'function') {
+      const connected = await this.loraAdapter.isConnected();
+
+      if (!connected && this.loraDeviceId) {
+        await this.loraAdapter.connect(this.loraDeviceId);
+      }
+    }
+
+    await this.loraAdapter.write(
+      `${JSON.stringify({
+        kind: 'mesh-packet',
+        packet: {
+          ...packet,
+          transport: 'LoRa-BLE',
+        },
+      })}\n`,
     );
   }
 
@@ -422,7 +517,8 @@ class MeshService {
   private toLegacyMessage(log: EmergencyLogRecord) {
     return {
       id: log.id,
-      sender: log.senderId,
+      sender: String(log.metadata?.senderName ?? log.senderId),
+      senderId: log.senderId,
       type: log.eventType,
       payload: log.message,
       timestamp: log.createdAt,
@@ -430,6 +526,7 @@ class MeshService {
       ttl: Math.max(log.maxHops - log.hopCount, 0),
       deviceType: DEVICE_TYPES.PHONE,
       receivedFrom: log.transport,
+      metadata: log.metadata,
     };
   }
 

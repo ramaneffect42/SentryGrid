@@ -139,6 +139,13 @@ class BLETransport extends BaseTransport {
     await device.write(message, 'utf-8');
   }
 
+  async sendToPeer(address, message) {
+    await this.writeToDevice(address, `${JSON.stringify({
+      kind: 'mesh-packet',
+      packet: message,
+    })}\n`);
+  }
+
   async broadcast(message) {
     await super.broadcast(message);
 

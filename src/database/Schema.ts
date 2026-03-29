@@ -149,6 +149,12 @@ export const initializeDatabase = async (): Promise<SQLiteDatabase> => {
         `CREATE INDEX IF NOT EXISTS idx_emergency_logs_sync_status
          ON emergency_logs(syncStatus, createdAt DESC);`,
       ],
+      [
+        `CREATE TABLE IF NOT EXISTS app_settings (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT
+        );`,
+      ],
     ]);
 
     db = instance;
@@ -310,4 +316,28 @@ export const getMeshPeers = async (): Promise<MeshPeerRecord[]> => {
   );
 
   return normalizeRows(result.rows).map(mapPeerRow);
+};
+
+export const getAppSetting = async (key: string): Promise<string | null> => {
+  const database = await getDatabase();
+  const result = await database.executeAsync(
+    `SELECT value
+     FROM app_settings
+     WHERE key = ?
+     LIMIT 1;`,
+    [key],
+  );
+
+  const [row] = normalizeRows(result.rows);
+  return typeof row?.value === 'string' ? row.value : null;
+};
+
+export const setAppSetting = async (key: string, value: string): Promise<void> => {
+  const database = await getDatabase();
+
+  await database.executeAsync(
+    `INSERT OR REPLACE INTO app_settings (key, value)
+     VALUES (?, ?);`,
+    [key, value],
+  );
 };

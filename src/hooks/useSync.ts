@@ -7,8 +7,9 @@ import {
   markEmergencyLogsFailed,
   markEmergencyLogsSynced,
 } from '../database/Schema';
+import {SYNC_ENDPOINT} from '../config/runtime';
 
-const DEFAULT_SYNC_ENDPOINT = 'http://10.0.2.2:4000/api/sync';
+const DEFAULT_SYNC_ENDPOINT = SYNC_ENDPOINT;
 
 interface SyncState {
   isOnline: boolean;

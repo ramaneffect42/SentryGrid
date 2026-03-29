@@ -58,6 +58,9 @@ app.post('/api/sync', async (request, response) => {
   const syncedAt = new Date().toISOString();
 
   try {
+    console.log('Received /api/sync payload');
+    console.log(JSON.stringify(request.body, null, 2));
+
     const operations = logs.map(log => ({
       updateOne: {
         filter: {id: log.id},

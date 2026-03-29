@@ -1,7 +1,8 @@
 import React from 'react';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
-import ChatScreen from '../screens/ChatScreen';
+import ChatHistoryScreen from '../screens/ChatHistoryScreen';
+import ChatMessengerScreen from '../screens/ChatMessengerScreen';
 import HomeScreen from '../screens/HomeScreen';
 import NearbyDevicesScreen from '../screens/NearbyDevicesScreen';
 import {APP_COLORS} from '../utils/constants';
@@ -23,7 +24,8 @@ function AppNavigator() {
       }}>
       <Stack.Screen name="Home" component={HomeScreen} options={{title: 'SentryGrid'}} />
       <Stack.Screen name="NearbyDevices" component={NearbyDevicesScreen} options={{title: 'Nearby Devices'}} />
-      <Stack.Screen name="Chat" component={ChatScreen} options={{title: 'Mesh Chat'}} />
+      <Stack.Screen name="Chat" component={ChatMessengerScreen} options={{title: 'Mesh Chat'}} />
+      <Stack.Screen name="ChatHistory" component={ChatHistoryScreen} options={{title: 'Chat History'}} />
     </Stack.Navigator>
   );
 }
