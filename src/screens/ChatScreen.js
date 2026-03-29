@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {FlatList, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
+import {Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 
 import MessageBubble from '../components/MessageBubble';
 import ScreenContainer from '../components/ScreenContainer';
@@ -23,6 +23,25 @@ function ChatScreen() {
     setDraft('');
   };
 
+  const sendViaLoRa = async () => {
+    const trimmed = draft.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    try {
+      await meshService.sendLoRaText(trimmed);
+      setDraft('');
+      Alert.alert('LoRa bridge', 'Message forwarded to the ESP32 serial bridge.');
+    } catch (error) {
+      Alert.alert(
+        'LoRa bridge unavailable',
+        error instanceof Error ? error.message : 'Unable to write to the ESP32 bridge.',
+      );
+    }
+  };
+
   return (
     <ScreenContainer
       title="Mesh Chat"
@@ -37,6 +56,11 @@ function ChatScreen() {
         />
 
         <View style={styles.composer}>
+          <Text style={styles.statusText}>
+            {state.loraConnected
+              ? `LoRa bridge ready: ${state.loraBridgeName || 'ESP32 bridge'}`
+              : 'Pair an ESP32 Bluetooth serial device to unlock long-range relay.'}
+          </Text>
           <TextInput
             value={draft}
             onChangeText={setDraft}
@@ -47,6 +71,12 @@ function ChatScreen() {
           />
           <Pressable style={styles.sendButton} onPress={sendMessage}>
             <Text style={styles.sendButtonText}>Send</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.sendButton, styles.loraButton, !state.loraConnected && styles.disabledButton]}
+            onPress={sendViaLoRa}
+            disabled={!state.loraConnected}>
+            <Text style={styles.loraButtonText}>Send Via LoRa Bridge</Text>
           </Pressable>
         </View>
       </View>
@@ -76,6 +106,11 @@ const styles = StyleSheet.create({
     color: APP_COLORS.textPrimary,
     fontSize: 16,
   },
+  statusText: {
+    color: APP_COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   sendButton: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -87,6 +122,17 @@ const styles = StyleSheet.create({
     color: '#082032',
     fontWeight: '700',
     fontSize: 15,
+  },
+  loraButton: {
+    backgroundColor: '#214f2d',
+  },
+  loraButtonText: {
+    color: '#dcfce7',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  disabledButton: {
+    opacity: 0.45,
   },
 });
 

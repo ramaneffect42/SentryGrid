@@ -102,7 +102,11 @@ function HomeScreen({navigation}) {
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>LoRa Bridge</Text>
           <Text style={styles.metricValue}>{state.loraConnected ? 'Linked' : 'Standby'}</Text>
-          <Text style={styles.metricMeta}>ESP32 + LoRa via Bluetooth Serial adapter</Text>
+          <Text style={styles.metricMeta}>
+            {state.loraConnected && state.loraBridgeName
+              ? `Bridge: ${state.loraBridgeName}`
+              : 'ESP32 + LoRa via Bluetooth Serial adapter'}
+          </Text>
         </View>
       </View>
 

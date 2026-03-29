@@ -44,6 +44,10 @@ export interface MeshTransport {
   stopDiscovery: () => Promise<void>;
   connect: (peer: MeshPeerRecord) => Promise<void>;
   broadcast: (packet: MeshPacket) => Promise<void>;
+  refreshDiscovery?: () => Promise<void>;
+  connectLoRaBridge?: (peer: MeshPeerRecord) => Promise<void>;
+  isDeviceConnected?: (address: string) => Promise<boolean>;
+  writeToDevice?: (address: string, message: string) => Promise<void>;
 }
 
 export interface BluetoothSerialAdapter {
@@ -70,6 +74,7 @@ export interface MeshState {
   }>;
   unsyncedCount: number;
   loraConnected: boolean;
+  loraBridgeName: string | null;
 }
 
 interface MeshServiceOptions {
@@ -89,6 +94,7 @@ class MeshService {
   private initialized = false;
   private loraAdapter: BluetoothSerialAdapter | null = null;
   private loraDeviceId: string | null = null;
+  private loraBridgeName: string | null = null;
 
   constructor({deviceId, transports = [], maxHops = 5}: MeshServiceOptions = {}) {
     this.deviceId = deviceId ?? `sentrygrid-${createId()}`;
@@ -144,6 +150,7 @@ class MeshService {
       messages: this.logs.map(log => this.toLegacyMessage(log)),
       unsyncedCount: this.logs.filter(log => log.syncStatus !== 'synced').length,
       loraConnected: Boolean(this.loraAdapter && this.loraDeviceId),
+      loraBridgeName: this.loraBridgeName,
     };
   }
 
@@ -179,6 +186,56 @@ class MeshService {
     await this.persistAndPublish(log);
     await this.broadcastPacket(this.toPacket(log));
     return log;
+  }
+
+  async refreshDiscovery(): Promise<void> {
+    await Promise.all(
+      this.transports.map(transport =>
+        typeof transport.refreshDiscovery === 'function'
+          ? transport.refreshDiscovery()
+          : transport.startDiscovery(),
+      ),
+    );
+  }
+
+  async connectLoRaBridge(peer: MeshPeerRecord): Promise<void> {
+    const transport = this.transports.find(candidate => candidate.name === peer.transport);
+
+    if (!transport) {
+      throw new Error(`No transport available for ${peer.transport}`);
+    }
+
+    if (typeof transport.connectLoRaBridge === 'function') {
+      await transport.connectLoRaBridge(peer);
+    } else {
+      await transport.connect(peer);
+    }
+
+    if (typeof transport.writeToDevice !== 'function' || typeof transport.isDeviceConnected !== 'function') {
+      throw new Error(`${peer.transport} transport does not support LoRa bridge writes`);
+    }
+
+    const writeToDevice = transport.writeToDevice;
+    const isDeviceConnected = transport.isDeviceConnected;
+
+    this.attachLoRaSerial(
+      {
+        connect: async deviceId => {
+          await transport.connect({
+            ...peer,
+            id: deviceId,
+          });
+        },
+        disconnect: async () => {
+          // The underlying transport manages socket cleanup on shutdown.
+        },
+        isConnected: () => isDeviceConnected(peer.id),
+        write: message => writeToDevice(peer.id, message),
+      },
+      peer.id,
+    );
+    this.loraBridgeName = peer.name ?? peer.id;
+    await this.emit();
   }
 
   attachLoRaSerial(adapter: BluetoothSerialAdapter, deviceId: string): void {
