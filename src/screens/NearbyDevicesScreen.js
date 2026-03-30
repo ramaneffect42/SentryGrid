@@ -1,5 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {Alert, Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 
 import ScreenContainer from '../components/ScreenContainer';
 import loraBleBridgeService from '../services/loraBridgeRuntime';
@@ -137,18 +137,20 @@ function NearbyDevicesScreen() {
               </View>
             ) : null}
 
-            {bluetoothPeers.map(peer => (
-              <Pressable
-                key={`modal-${peer.id}`}
-                style={styles.modalPeer}
-                onPress={() => {
-                  void meshService.connectToPeer(peer);
-                  setIsPickerOpen(false);
-                }}>
-                <Text style={styles.modalPeerTitle}>{peer.name || peer.id}</Text>
-                <Text style={styles.modalPeerMeta}>{peer.id}</Text>
-              </Pressable>
-            ))}
+            <ScrollView style={styles.modalList} contentContainerStyle={styles.modalListContent}>
+              {bluetoothPeers.map(peer => (
+                <Pressable
+                  key={`modal-${peer.id}`}
+                  style={styles.modalPeer}
+                  onPress={() => {
+                    void meshService.connectToPeer(peer);
+                    setIsPickerOpen(false);
+                  }}>
+                  <Text style={styles.modalPeerTitle}>{peer.name || peer.id}</Text>
+                  <Text style={styles.modalPeerMeta}>{peer.id}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -256,6 +258,7 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 14,
     minHeight: '45%',
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -276,6 +279,12 @@ const styles = StyleSheet.create({
     color: APP_COLORS.accent,
     fontWeight: '700',
   },
+  modalList: {
+    flexGrow: 0,
+  },
+  modalListContent: {
+    paddingBottom: 8,
+  },
   modalPeer: {
     backgroundColor: '#111c34',
     borderRadius: 16,
@@ -283,6 +292,7 @@ const styles = StyleSheet.create({
     gap: 4,
     borderWidth: 1,
     borderColor: '#27406c',
+    marginBottom: 10,
   },
   modalPeerTitle: {
     color: '#f8fafc',

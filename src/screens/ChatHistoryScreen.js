@@ -1,5 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {FlatList, StyleSheet, Text, View} from 'react-native';
+import {Alert, FlatList, Pressable, StyleSheet, Text, View} from 'react-native';
 
 import ScreenContainer from '../components/ScreenContainer';
 import meshService from '../services/meshRuntime';
@@ -14,6 +14,19 @@ function ChatHistoryScreen() {
     () => [...state.logs].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     [state.logs],
   );
+
+  const clearHistory = () => {
+    Alert.alert('Clear history', 'This will erase local chat history on this phone.', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          await meshService.clearChatHistory();
+        },
+      },
+    ]);
+  };
 
   const renderHistoryItem = ({item}) => (
     <View style={styles.card}>
@@ -41,6 +54,9 @@ function ChatHistoryScreen() {
         <Text style={styles.summaryTitle}>History Summary</Text>
         <Text style={styles.summaryText}>Messages stored locally: {logs.length}</Text>
         <Text style={styles.summaryText}>Pending cloud sync: {state.unsyncedCount}</Text>
+        <Pressable style={styles.clearButton} onPress={clearHistory}>
+          <Text style={styles.clearButtonText}>Clear History</Text>
+        </Pressable>
       </View>
 
       <FlatList
@@ -77,6 +93,19 @@ const styles = StyleSheet.create({
     color: APP_COLORS.textSecondary,
     fontSize: 14,
     lineHeight: 20,
+  },
+  clearButton: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    backgroundColor: '#3b1320',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  clearButtonText: {
+    color: '#fecdd3',
+    fontWeight: '700',
+    fontSize: 14,
   },
   emptyCard: {
     backgroundColor: APP_COLORS.panel,

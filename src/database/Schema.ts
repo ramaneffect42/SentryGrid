@@ -284,6 +284,11 @@ export const countUnsyncedEmergencyLogs = async (): Promise<number> => {
   return Number(row?.total ?? 0);
 };
 
+export const clearEmergencyLogs = async (): Promise<void> => {
+  const database = await getDatabase();
+  await database.executeAsync('DELETE FROM emergency_logs;');
+};
+
 export const upsertMeshPeer = async (peer: MeshPeerRecord): Promise<void> => {
   const database = await getDatabase();
 

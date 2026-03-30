@@ -28,7 +28,7 @@ static const size_t SEEN_CACHE_SIZE = 64;
 static const char *BRIDGE_NODE_ID = "esp32-lora-bridge";
 
 BLECharacteristic *txCharacteristic = nullptr;
-bool bleClientConnected = false;
+int bleClientCount = 0;
 String bleBuffer;
 String seenPacketIds[SEEN_CACHE_SIZE];
 size_t seenPacketIndex = 0;
@@ -49,7 +49,7 @@ void rememberPacket(const String &packetId) {
 }
 
 void notifyPhone(const String &jsonLine) {
-  if (!bleClientConnected || txCharacteristic == nullptr) {
+  if (bleClientCount <= 0 || txCharacteristic == nullptr) {
     return;
   }
 
@@ -153,13 +153,15 @@ void processBridgeLine(const String &line) {
 
 class BridgeServerCallbacks : public BLEServerCallbacks {
   void onConnect(BLEServer *server) override {
-    bleClientConnected = true;
-    server->getAdvertising()->stop();
+    bleClientCount++;
+    server->startAdvertising();
     Serial.println("BLE client connected");
   }
 
   void onDisconnect(BLEServer *server) override {
-    bleClientConnected = false;
+    if (bleClientCount > 0) {
+      bleClientCount--;
+    }
     server->startAdvertising();
     Serial.println("BLE client disconnected");
   }

@@ -86,6 +86,20 @@ function ChatMessengerScreen({navigation}) {
     }
   };
 
+  const clearChat = () => {
+    Alert.alert('Clear chat', 'This will erase local chat messages and history on this phone.', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          await meshService.clearChatHistory();
+          showUserFeedback('Local chat history cleared.');
+        },
+      },
+    ]);
+  };
+
   const sendViaLoRa = async () => {
     const trimmed = draft.trim();
 
@@ -169,6 +183,9 @@ function ChatMessengerScreen({navigation}) {
           </ScrollView>
 
           <Text style={styles.statusMessage}>{statusMessage}</Text>
+          <Pressable style={styles.clearButton} onPress={clearChat}>
+            <Text style={styles.clearButtonText}>Clear Chat</Text>
+          </Pressable>
         </View>
 
         <FlatList
@@ -292,6 +309,19 @@ const styles = StyleSheet.create({
     color: APP_COLORS.success,
     fontSize: 13,
     lineHeight: 18,
+  },
+  clearButton: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    backgroundColor: '#3b1320',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  clearButtonText: {
+    color: '#fecdd3',
+    fontWeight: '700',
+    fontSize: 13,
   },
   chatList: {
     flex: 1,

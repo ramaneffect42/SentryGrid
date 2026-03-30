@@ -4,6 +4,7 @@ import {
   EmergencyLogRecord,
   MeshPeerRecord,
   countUnsyncedEmergencyLogs,
+  clearEmergencyLogs,
   getAppSetting,
   getMeshPeers,
   getRecentEmergencyLogs,
@@ -329,6 +330,13 @@ class MeshService {
 
   async receiveBridgePacket(packet: MeshPacket, transportName = 'LoRa-BLE'): Promise<void> {
     await this.handleIncomingPacket(packet, {name: transportName} as MeshTransport);
+  }
+
+  async clearChatHistory(): Promise<void> {
+    this.seenPacketIds.clear();
+    await clearEmergencyLogs();
+    this.logs = [];
+    await this.emit();
   }
 
   private async handlePeerDiscovered(peer: any, transport: MeshTransport): Promise<void> {
