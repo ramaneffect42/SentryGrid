@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Alert, Pressable, StyleSheet, Text, View} from 'react-native';
+import Geolocation from '@react-native-community/geolocation';
 
 import ScreenContainer from '../components/ScreenContainer';
 import useSync from '../hooks/useSync';
@@ -15,14 +16,7 @@ function HomeScreen({navigation}) {
 
   const captureCoordinates = () =>
     new Promise(resolve => {
-      const geolocation = globalThis?.navigator?.geolocation;
-
-      if (!geolocation) {
-        resolve(null);
-        return;
-      }
-
-      geolocation.getCurrentPosition(
+      Geolocation.getCurrentPosition(
         position => {
           resolve({
             latitude: position.coords.latitude,
@@ -34,8 +28,9 @@ function HomeScreen({navigation}) {
         () => resolve(null),
         {
           enableHighAccuracy: true,
-          timeout: 8000,
+          timeout: 15000,
           maximumAge: 5000,
+          distanceFilter: 0,
         },
       );
     });
@@ -130,12 +125,20 @@ function HomeScreen({navigation}) {
         <Text style={styles.secondaryButtonText}>View Nearby Devices</Text>
       </Pressable>
 
+      <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('LoRaStatus')}>
+        <Text style={styles.secondaryButtonText}>Open LoRa Status</Text>
+      </Pressable>
+
       <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('Chat')}>
         <Text style={styles.secondaryButtonText}>Open Mesh Console</Text>
       </Pressable>
 
       <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('ChatHistory')}>
         <Text style={styles.secondaryButtonText}>View Chat History</Text>
+      </Pressable>
+
+      <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate('CloudSync')}>
+        <Text style={styles.secondaryButtonText}>Open Cloud Sync Setup</Text>
       </Pressable>
     </ScreenContainer>
   );

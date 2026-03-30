@@ -3,13 +3,15 @@ import NetInfo from '@react-native-community/netinfo';
 
 import {
   countUnsyncedEmergencyLogs,
+  getAppSetting,
   getUnsyncedEmergencyLogs,
   markEmergencyLogsFailed,
   markEmergencyLogsSynced,
+  setAppSetting,
 } from '../database/Schema';
-import {SYNC_ENDPOINT} from '../config/runtime';
+import {DEFAULT_SYNC_SERVER_BASE_URL, toHealthEndpoint, toSyncEndpoint} from '../config/runtime';
 
-const DEFAULT_SYNC_ENDPOINT = SYNC_ENDPOINT;
+const SYNC_SERVER_URL_KEY = 'syncServerBaseUrl';
 
 interface SyncState {
   isOnline: boolean;
@@ -17,27 +19,98 @@ interface SyncState {
   pendingCount: number;
   lastSyncedAt: string | null;
   error: string | null;
+  serverBaseUrl: string;
+  healthStatus: string | null;
 }
 
 export interface UseSyncState extends SyncState {
   syncNow: () => Promise<void>;
+  setServerBaseUrl: (value: string) => Promise<void>;
+  checkServerHealth: () => Promise<void>;
 }
 
-export const useSync = (endpoint = DEFAULT_SYNC_ENDPOINT): UseSyncState => {
+export const useSync = (): UseSyncState => {
   const [state, setState] = useState<SyncState>({
     isOnline: false,
     isSyncing: false,
     pendingCount: 0,
     lastSyncedAt: null,
     error: null,
+    serverBaseUrl: DEFAULT_SYNC_SERVER_BASE_URL,
+    healthStatus: null,
   });
+
+  const endpoint = toSyncEndpoint(state.serverBaseUrl);
 
   const refreshPendingCount = useCallback(async () => {
     const pendingCount = await countUnsyncedEmergencyLogs();
     setState(current => ({...current, pendingCount}));
   }, []);
 
+  const loadServerBaseUrl = useCallback(async () => {
+    const savedValue = await getAppSetting(SYNC_SERVER_URL_KEY);
+
+    if (savedValue !== null) {
+      setState(current => ({...current, serverBaseUrl: savedValue}));
+    }
+  }, []);
+
+  const setServerBaseUrl = useCallback(async (value: string) => {
+    const normalized = value.trim().replace(/\/+$/, '');
+    await setAppSetting(SYNC_SERVER_URL_KEY, normalized);
+    setState(current => ({
+      ...current,
+      serverBaseUrl: normalized,
+      healthStatus: null,
+      error: null,
+    }));
+  }, []);
+
+  const checkServerHealth = useCallback(async () => {
+    const healthEndpoint = toHealthEndpoint(state.serverBaseUrl);
+
+    if (!healthEndpoint) {
+      setState(current => ({
+        ...current,
+        healthStatus: 'Set the server URL first.',
+        error: 'Set the sync server URL before checking health.',
+      }));
+      return;
+    }
+
+    try {
+      const response = await fetch(healthEndpoint);
+
+      if (!response.ok) {
+        throw new Error(`Health check failed with status ${response.status}`);
+      }
+
+      const payload = await response.json();
+      setState(current => ({
+        ...current,
+        healthStatus: `Server ${payload?.status ?? 'ok'} | Mongo ready state ${payload?.mongoReadyState ?? 'unknown'}`,
+        error: null,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to reach the sync server';
+      setState(current => ({
+        ...current,
+        healthStatus: `Health check failed: ${message}`,
+        error: message,
+      }));
+    }
+  }, [state.serverBaseUrl]);
+
   const syncNow = useCallback(async () => {
+    if (!endpoint) {
+      setState(current => ({
+        ...current,
+        isSyncing: false,
+        error: 'Set the sync server URL first.',
+      }));
+      return;
+    }
+
     setState(current => ({...current, isSyncing: true, error: null}));
 
     const pendingLogs = await getUnsyncedEmergencyLogs();
@@ -74,6 +147,7 @@ export const useSync = (endpoint = DEFAULT_SYNC_ENDPOINT): UseSyncState => {
         pendingCount,
         lastSyncedAt: syncedAt,
         error: null,
+        healthStatus: 'Sync API reachable',
       }));
     } catch (error) {
       await markEmergencyLogsFailed(pendingLogs.map(log => log.id));
@@ -84,6 +158,7 @@ export const useSync = (endpoint = DEFAULT_SYNC_ENDPOINT): UseSyncState => {
         isSyncing: false,
         pendingCount,
         error: message,
+        healthStatus: `Sync failed: ${message}`,
       }));
     }
   }, [endpoint]);
@@ -113,17 +188,20 @@ export const useSync = (endpoint = DEFAULT_SYNC_ENDPOINT): UseSyncState => {
       void handleNetworkChange(netState);
     });
 
+    void loadServerBaseUrl();
     void NetInfo.fetch().then(handleNetworkChange);
 
     return () => {
       isMounted = false;
       unsubscribe();
     };
-  }, [refreshPendingCount, syncNow]);
+  }, [loadServerBaseUrl, refreshPendingCount, syncNow]);
 
   return {
     ...state,
     syncNow,
+    setServerBaseUrl,
+    checkServerHealth,
   };
 };
 

@@ -61,6 +61,12 @@ app.post('/api/sync', async (request, response) => {
     console.log('Received /api/sync payload');
     console.log(JSON.stringify(request.body, null, 2));
 
+    const broadcastLogs = logs.filter(log => log?.metadata?.mode === 'broadcast');
+    if (broadcastLogs.length > 0) {
+      console.log('Broadcast logs received by /api/sync');
+      console.log(JSON.stringify(broadcastLogs, null, 2));
+    }
+
     const operations = logs.map(log => ({
       updateOne: {
         filter: {id: log.id},

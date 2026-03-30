@@ -3,7 +3,9 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
 import ChatHistoryScreen from '../screens/ChatHistoryScreen';
 import ChatMessengerScreen from '../screens/ChatMessengerScreen';
+import CloudSyncScreen from '../screens/CloudSyncScreen';
 import HomeScreen from '../screens/HomeScreen';
+import LoRaStatusScreen from '../screens/LoRaStatusScreen';
 import NearbyDevicesScreen from '../screens/NearbyDevicesScreen';
 import {APP_COLORS} from '../utils/constants';
 
@@ -26,6 +28,8 @@ function AppNavigator() {
       <Stack.Screen name="NearbyDevices" component={NearbyDevicesScreen} options={{title: 'Nearby Devices'}} />
       <Stack.Screen name="Chat" component={ChatMessengerScreen} options={{title: 'Mesh Chat'}} />
       <Stack.Screen name="ChatHistory" component={ChatHistoryScreen} options={{title: 'Chat History'}} />
+      <Stack.Screen name="LoRaStatus" component={LoRaStatusScreen} options={{title: 'LoRa Status'}} />
+      <Stack.Screen name="CloudSync" component={CloudSyncScreen} options={{title: 'Cloud Sync'}} />
     </Stack.Navigator>
   );
 }

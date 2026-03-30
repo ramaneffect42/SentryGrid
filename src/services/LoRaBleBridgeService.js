@@ -17,6 +17,16 @@ class LoRaBleBridgeService {
     this.scanTimer = null;
     this.subscription = null;
     this.buffer = '';
+    this.listeners = new Set();
+    this.stats = {
+      isScanning: false,
+      connectedDeviceId: null,
+      connectedDeviceName: null,
+      txCount: 0,
+      rxCount: 0,
+      lastActivityAt: null,
+      lastPacketPreview: null,
+    };
   }
 
   setPacketHandler(handler) {
@@ -27,8 +37,31 @@ class LoRaBleBridgeService {
     return this.discoveredDevices;
   }
 
+  subscribe(listener) {
+    this.listeners.add(listener);
+    listener(this.getState());
+
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  getState() {
+    return {
+      ...this.stats,
+      discoveredDevices: this.discoveredDevices,
+    };
+  }
+
+  emit() {
+    const state = this.getState();
+    this.listeners.forEach(listener => listener(state));
+  }
+
   async scanForDevices(scanDurationMs = 6000) {
     this.discoveredDevices = [];
+    this.stats.isScanning = true;
+    this.emit();
 
     await this.stopScan();
 
@@ -60,6 +93,7 @@ class LoRaBleBridgeService {
               rssi: device.rssi ?? null,
             },
           ];
+          this.emit();
         });
 
         this.scanTimer = setTimeout(async () => {
@@ -83,6 +117,9 @@ class LoRaBleBridgeService {
     } catch (_error) {
       // Ignore repeated stop calls.
     }
+
+    this.stats.isScanning = false;
+    this.emit();
   }
 
   async connect(deviceId) {
@@ -116,6 +153,10 @@ class LoRaBleBridgeService {
     );
 
     this.connectedDevice = readyDevice;
+    this.stats.connectedDeviceId = readyDevice.id;
+    this.stats.connectedDeviceName = readyDevice.name || readyDevice.localName || 'ESP32 LoRa Bridge';
+    this.stats.lastActivityAt = new Date().toISOString();
+    this.emit();
     logger.info('Connected to ESP32 BLE LoRa bridge', {deviceId});
   }
 
@@ -133,6 +174,9 @@ class LoRaBleBridgeService {
 
     this.connectedDevice = null;
     this.buffer = '';
+    this.stats.connectedDeviceId = null;
+    this.stats.connectedDeviceName = null;
+    this.emit();
   }
 
   async isConnected() {
@@ -154,6 +198,10 @@ class LoRaBleBridgeService {
       RX_CHARACTERISTIC_UUID,
       encodeBase64(message),
     );
+    this.stats.txCount += 1;
+    this.stats.lastActivityAt = new Date().toISOString();
+    this.stats.lastPacketPreview = message.slice(0, 120);
+    this.emit();
   }
 
   handleIncomingChunk(chunk) {
@@ -169,6 +217,10 @@ class LoRaBleBridgeService {
           const decoded = JSON.parse(line);
 
           if (decoded?.kind === 'mesh-packet' && decoded.packet) {
+            this.stats.rxCount += 1;
+            this.stats.lastActivityAt = new Date().toISOString();
+            this.stats.lastPacketPreview = JSON.stringify(decoded.packet).slice(0, 120);
+            this.emit();
             this.packetHandler?.(decoded.packet);
             return;
           }
